@@ -1,115 +1,196 @@
 # next-env-safe
-> If you accidentally access a server key on the client, **next-env-safe** will throw with a clear error.
 
+A lightweight, type-safe environment manager for **Next.js**, built on top of **Zod**.  
+Designed to keep server secrets secure while providing fully-typed client and server environment variables with excellent Developer Experience.
 
 ---
 
+<p align="center">
+  <img src="https://img.shields.io/npm/v/next-env-safe?color=blue" />
+  <img src="https://img.shields.io/npm/dm/next-env-safe" />
+  <img src="https://img.shields.io/npm/l/next-env-safe" />
+  <img src="https://img.shields.io/bundlephobia/minzip/next-env-safe" />
+</p>
 
-## API
+---
 
+## 🚀 Features
+
+- ✅ Strong TypeScript inference using **Zod**
+- ✅ Prevents accidental **server → client** secret leakage
+- ✅ Throws **build-time errors** for missing/invalid env variables
+- ✅ Works with **Next.js App Router** and **Pages Router**
+- ✅ Simple, minimal, predictable API
+- ✅ No runtime bloat → extremely small & tree-shakeable
+
+---
+
+## 📦 Installation
+
+```bash
+npm install next-env-safe zod
+```
+
+or
+
+```bash
+pnpm add next-env-safe zod
+```
+
+---
+
+## 🧩 Quick Start
+
+Create a file called:
+
+```
+env.ts
+```
+
+Then define your environment schema:
 
 ```ts
-createEnv({
-server: { ...zodSchemas },
-client: { ...zodSchemasStartingWithNEXT_PUBLIC_ },
-runtimeEnv: process.env,
-clientPrefix?: string, // default: 'NEXT_PUBLIC_'
-verbose?: boolean,
-}) => {
-// merged object
-// server keys only present on server
-// client keys present on both
-client: { ...only client keys }
+import { z } from "zod";
+import { createEnv } from "next-env-safe";
+
+export const env = createEnv({
+  server: {
+    DATABASE_URL: z.string().url(),
+    SECRET_KEY: z.string().min(32),
+  },
+  client: {
+    NEXT_PUBLIC_API_URL: z.string().url(),
+  },
+  runtimeEnv: process.env, // usually just process.env
+});
+```
+
+---
+
+## ✅ Usage
+
+### ✅ Server Components, Server Actions, or API Routes
+
+```ts
+import { env } from "@/env";
+
+console.log(env.DATABASE_URL);
+```
+
+### ✅ Client Components
+
+```tsx
+import { env } from "@/env";
+
+export default function Page() {
+  return <div>{env.client.NEXT_PUBLIC_API_URL}</div>;
 }
 ```
 
+---
 
-### Rules
-- Server keys **must not** start with `NEXT_PUBLIC_` (or your custom prefix)
-- Client keys **must** start with `NEXT_PUBLIC_` (or your custom prefix)
-- On the server, both server+client are validated
-- On the client, only client keys are available
+## 🔒 Security
 
+If you attempt to access a **server-only** environment variable on the **client**,  
+you will get a clear runtime error:
+
+> ❌ Attempted to access server environment key "SECRET_KEY" from the client.
+
+This ensures sensitive secrets **never leak** into the browser bundle.
 
 ---
 
+## ⚙️ API
 
-## Why this over hand-rolled solutions?
-- One file, one API
-- Compile/startup fails fast when envs are missing
-- Strong type inference from Zod
-- Safer client/server separation with runtime guard
+```ts
+createEnv({
+  server: {
+    // Zod schemas for server-only variables
+  },
+  client: {
+    // Zod schemas for client-side variables starting with NEXT_PUBLIC_
+  },
+  runtimeEnv: process.env, // or custom env object
+  clientPrefix: string, // default: "NEXT_PUBLIC_"
+  verbose: boolean, // log warnings
+});
+```
 
+### Return Value:
+
+- **Server environment values** (only available on server)
+- **Client environment values** (available everywhere)
+- `env.client` — a safe subset for client components
 
 ---
 
+## ✅ Rules
 
-## Type Inference Example
+### Server Schema
+
+- Server env keys **must NOT** start with the client prefix  
+  (default: `NEXT_PUBLIC_`)
+
+### Client Schema
+
+- Client env keys **must** start with `NEXT_PUBLIC_`  
+  (or your custom prefix)
+
+### Validation
+
+- On the server → both server and client schemas are validated
+- On the client → only the client schema is used
+- Server values are completely removed from browser bundles
+
+---
+
+## 🧠 Type Inference Example
+
 ```ts
 const env = createEnv({
-server: { FOO: z.number().int() },
-client: { NEXT_PUBLIC_BAR: z.string() },
-runtimeEnv: process.env,
+  server: { FOO: z.number().int() },
+  client: { NEXT_PUBLIC_BAR: z.string() },
+  runtimeEnv: process.env,
 });
 
-
-// env.FOO: number
-// env.client.NEXT_PUBLIC_BAR: string
+// env.FOO → number
+// env.client.NEXT_PUBLIC_BAR → string
 ```
-
 
 ---
 
+## ❓ FAQ
 
-## FAQ
+### ✅ Can I change the client prefix?
 
-
-**Q: Can I change the client prefix?**
 Yes:
+
 ```ts
-createEnv({ clientPrefix: "PUBLIC_", ... })
+createEnv({
+  clientPrefix: "PUBLIC_",
+  ...
+})
 ```
-All client keys must start with `PUBLIC_` then.
 
-
-**Q: Will server values be bundled in client JS?**
-The returned object omits server values on the client and throws if you try to access them. Avoid importing server-only files inside Client Components to keep bundles lean.
-
-
-**Q: Do I need different files for server/client?**
-Not required. Import `env` in server code and `env.client` in client code.
-
+All client-visible variables must then start with `PUBLIC_`.
 
 ---
 
+### ✅ Will server secrets ever appear in the browser?
 
-## License
+❌ No.  
+Server variables are **never** included in the client-side bundle.  
+Accessing them in client code throws an error.
+
+---
+
+### ✅ Do I need separate env files for client and server?
+
+No.  
+A single unified `env.ts` works everywhere.
+
+---
+
+## 📄 License
+
 MIT © Ali
-
-
-// FILE: LICENSE
-MIT License
-
-
-Copyright (c) 2025 Ali
-
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.

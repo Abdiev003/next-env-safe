@@ -1,6 +1,6 @@
 {
   "name": "next-env-safe",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Type-safe, Next.js-ready environment variable manager (server/client separation, Zod validation, build-time fail).",
   "license": "MIT",
   "author": "Ali <aliabdiyev000@gmail.com>",

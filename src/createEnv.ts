@@ -13,11 +13,6 @@ function isError<T>(r: any): r is { success: false; error: z.ZodError<T> } {
   return r && r.success === false;
 }
 
-/**
- * Converts a schema map to a Zod object schema.
- * @param map - The schema map to convert to a Zod object schema.
- * @returns The Zod object schema.
- */
 function makeObjectSchema(
   map: SchemaMap
 ): z.ZodObject<Record<string, z.ZodTypeAny>> {
@@ -28,12 +23,6 @@ function makeObjectSchema(
   return z.object(shape);
 }
 
-/**
- * Checks if a key starts with a given prefix.
- * @param key - The key to check.
- * @param prefix - The prefix to check against.
- * @returns True if the key starts with the prefix, false otherwise.
- */
 function prefixOk(key: string, prefix: string): boolean {
   return key.startsWith(prefix);
 }
@@ -52,7 +41,7 @@ export function createEnv<Server extends SchemaMap, Client extends SchemaMap>(
   for (const key of Object.keys(server)) {
     if (prefixOk(key, clientPrefix)) {
       throw new EnvConfigError(
-        `Server key \"${key}\" must NOT start with client prefix \"${clientPrefix}\".`
+        `Server key "${key}" must NOT start with client prefix "${clientPrefix}".`
       );
     }
   }
@@ -60,7 +49,7 @@ export function createEnv<Server extends SchemaMap, Client extends SchemaMap>(
   for (const key of Object.keys(client)) {
     if (!prefixOk(key, clientPrefix)) {
       throw new EnvConfigError(
-        `Client key \"${key}\" must start with client prefix \"${clientPrefix}\".`
+        `Client key "${key}" must start with client prefix "${clientPrefix}".`
       );
     }
   }
@@ -70,7 +59,6 @@ export function createEnv<Server extends SchemaMap, Client extends SchemaMap>(
 
   const isServer = typeof window === "undefined";
 
-  // We only read from runtimeEnv. User decides what to pass (usually process.env)
   const serverValues = isServer
     ? serverSchema.safeParse(runtimeEnv)
     : { success: true, data: {} as InferFromSchemaMap<Server> };
@@ -83,7 +71,7 @@ export function createEnv<Server extends SchemaMap, Client extends SchemaMap>(
       .join("\n");
 
     throw new EnvValidationError(
-      `Invalid SERVER env:\n${issues}\n\nHint: Ensure required server variables exist in your runtime (e.g., .env).`
+      `Invalid SERVER env:\n${issues}\n\nHint: Ensure required server variables exist in your runtime.`
     );
   }
 
@@ -93,53 +81,51 @@ export function createEnv<Server extends SchemaMap, Client extends SchemaMap>(
       .join("\n");
 
     throw new EnvValidationError(
-      `Invalid CLIENT env:\n${issues}\n\nHint: NEXT_PUBLIC_* variables must be defined for the browser bundle.`
+      `Invalid CLIENT env:\n${issues}\n\nHint: All client variables must be prefixed with '${clientPrefix}'.`
     );
   }
 
   const serverData = serverValues.success
     ? (serverValues.data as InferFromSchemaMap<Server>)
     : ({} as InferFromSchemaMap<Server>);
+
   const clientData = clientValues.data as InferFromSchemaMap<Client>;
 
-  const merged = {
+  const target = {
     ...(isServer ? serverData : ({} as InferFromSchemaMap<Server>)),
     ...clientData,
-  } as InferFromSchemaMap<Server> & InferFromSchemaMap<Client>;
+    client: clientData,
+  };
 
   if (verbose && isServer) {
     const missingServer = Object.keys(server).filter(
-      (k) => merged[k as keyof typeof merged] === undefined
+      (k) => target[k] === undefined
     );
     const missingClient = Object.keys(client).filter(
-      (k) => merged[k as keyof typeof merged] === undefined
+      (k) => target[k] === undefined
     );
     if (missingServer.length || missingClient.length) {
-      // eslint-disable-next-line no-console
-      console.warn("[next-env-safe] Missing keys (after parse)", {
+      console.warn("[next-env-safe] Missing keys", {
         missingServer,
         missingClient,
       });
     }
   }
 
-  const frozenMerged = Object.freeze(merged);
-  const frozenClient = Object.freeze({ ...clientData });
+  const frozenTarget = Object.freeze(target);
 
-  const guarded = new Proxy(frozenMerged as any, {
+  const guarded = new Proxy(frozenTarget as any, {
     get(target, prop, receiver) {
       if (!isServer && typeof prop === "string" && prop in server) {
         throw new EnvConfigError(
-          `Attempted to access server env key \"${String(
+          `Attempted to access server env key "${String(
             prop
-          )}\" from the client. Import \"env.client\" instead.`
+          )}" from the client. Use env.client instead.`
         );
       }
       return Reflect.get(target, prop, receiver);
     },
   });
-
-  (guarded as any).client = frozenClient;
 
   return guarded as CreateEnvResult<
     InferFromSchemaMap<Server>,
